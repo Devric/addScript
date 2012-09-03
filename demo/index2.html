@@ -1,0 +1,513 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <script language="javascript" type="text/javascript" src="time.js"></script>
+    <script language="javascript" type="text/javascript">
+        time.start('page load');
+        window.onload = function(){
+            time.stop('page load');
+            time.report();
+        }
+    </script>
+
+    <meta charset="UTF-8">
+    <title></title>
+    <script language="javascript" type="text/javascript" src="http://code.jquery.com/jquery.min.js"></script>
+    <script language="javascript" type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/angular.js/1.0.1/angular.min.js"></script>
+    <script language="javascript" type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/cufon/1.09i/cufon-yui.js"></script>
+    <script language="javascript" type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/javascript-state-machine/2.0.0/state-machine.min.js"></script>
+    <script language="javascript" type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/ember.js/0.9.8.1/ember-0.9.8.1.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="http://twitter.github.com/bootstrap/assets/css/bootstrap.css" />
+</head>
+<body>
+    <div>some dom</div>
+    <div id="idv">
+        <span>some span</span>
+    </div>
+<img src="http://www.lolcats.com/images/u/12/24/lolcatsdotcompromdate.jpg" alt="alt"/>
+
+    <section>
+<h1>Making the Ugly Elegant: Templating With DOM</h1>
+<ol>
+	<li><a href="#how">How It Works</a></li>
+	<li><a href="#code">The Code</a></li>
+	<li><a href="#caveats">Caveats</a></li>
+	<li>
+		<a href="#api">The API</a>
+		<ol>
+			<li><a href="#api-new">Instantiation</a></li>
+			<li><a href="#api-shorthand">Shorthand XPath Syntax</a></li>
+			<li><a href="#api-html"><code>html</code></a></li>
+			<li>
+				<a href="#api-repeat"><code>repeat</code></a>
+				<ol>
+					<li><a href="#api-next"><code>next</code></a></li>
+				</ol>
+			</li>
+			<li><a href="#api-setvalue"><code>setValue</code></a></li>
+			<li><a href="#api-set"><code>set</code></a></li>
+			<li><a href="#api-addclass"><code>addClass</code></a></li>
+			<li><a href="#api-remove"><code>remove</code></a></li>
+		</ol>
+	</li>
+	<li><a href="#history">History</a></li>
+</ol>
+<p>
+	<strong>Templating is easy to do in any particular way, but doing it <em>right</em> is hard.</strong> I can’t
+	count how many hip new template engines have popped up in just the last few years alone. I’m about to add one to
+	the pile, but it is certainly not ‘hip’. It is however the closest I have ever gotten to the fabled golden
+	fleece of “100% separation”. Unlike most other forms of templating, this <em>really</em> doesn’t mix logic and
+	HTML, nor does it try to mask the blatent logic (“if this, then this”) by renaming ‘logic’ or using a
+	<samp>{{special syntax}}</samp>.
+</p><p>
+	What we’re going to do is this: take a static (and I mean static) HTML page, load it into the <abbr>DOM</abbr> as
+	an XML tree and then use the PHP as your logic, removing bits of the template not needed and changing the text
+	about.
+</p><p>
+	I got this idea from this blog post:
+	<a href="http://www.workingsoftware.com.au/page/Your_templating_engine_sucks_and_everything_you_have_ever_written_is_spaghetti_code_yes_you" rel="external"><cite>Your
+	templating engine sucks and everything you have ever written is spaghetti code (yes, you)</cite></a>. The article
+	itself is long, agressive, rambling and fails to demonstrate the principle concretely. I simply ignored all the text
+	and focused on the core principle that was being noted: instead of embedding some form of code in the HTML (even if
+	it’s just evolved search/replace syntax), just load the HTML into <abbr>DOM</abbr> and minpulate there so that the
+	HTML itself is <em>ignorant</em> of the templating.
+</p><p>
+	The reason why this is not just the same as a <samp>{{special-syntax}}</samp> is that we are <em>not mixing two
+	different languages, syntaxes or programming models in one HTML file</em>. If you change your templating engine,
+	it’s still HTML. If you change your logic, it’s still HTML. Special syntaxes invent another language to intermix
+	with HTML and thus add <em>programatic concepts</em> to a <em>declartive syntax</em>—which is not clean separation
+	no matter what you name it.
+</p>
+<blockquote>
+	<p>
+		Ever since the ’Web was invented there has been a transluscent, yet intransient divisor between those
+		developers who understand the fundamental <a href="/html_lasts">difference</a> between a declerative
+		markup syntax and a programming language, and those who don’t. Some learn to see this difference, others
+		simply ignore it and believe that it is a swell idea to tie structured data to a structured program that
+		will bit rot one thousand times quicker than the data will. If you are trying to replace HTML or CSS with
+		JavaScript, you are doing it wrong and have just signed a maintenance contract from hell, with yourself,
+		for yours and your data’s life.
+	</p>
+	<cite><a href="/dont_wanna">Kroc Camen—I Don’t Want to Do This Any More</a></cite>
+</blockquote>
+<p>
+	By doing it this way, the HTML file itself can be designed independently of the software, and that whoever does the
+	HTML doesn’t have to know PHP. You could change the whole server language and it wouldn’t change the template
+	one bit. More  importantly you can actually view the whole look of the template in the browser without running the
+	software. The reason I’m adopting this templating approach for <a href="/nononsense_forum">NoNonsense Forum</a>
+	is to make it easier for anybody to modify the look of their forum without having to learn PHP, and hopefully
+	encourage more contribution from all skill levels.
+</p><p>
+	It took a few revisions, two weeks and a lot of head-wracking to beat the <abbr>DOM</abbr> into something elegant,
+	but here it is, NoNonsense Templating:
+</p>
+
+
+<h2 id="how">How It Works</h2>
+<p>
+	The first thing to wrap your head around is that <abbr>DOM</abbr> templating works on the principle of mostly taking
+	away rather than adding. Logic-wise this is more difficult to get used to than you would think; you will be used to
+	adding data according to logic rather than “if this, then remove the thing that it is not”.
+</p><p>
+	Firstly your template should be a static HTML page that contains all of the content and ‘possibilities’ of your
+	output, where by we will remove what is not relevant to the page. For example:
+</p>
+
+<pre><code>&lt;p id="login" class="logged-out"&gt;
+	You are not logged in.
+&lt;/p&gt;
+&lt;p id="login" class="logged-in"&gt;
+	You are logged in as &lt;b class="username"&gt;Bob&lt;/b&gt;
+&lt;/p&gt;</code></pre>
+
+<p>
+	In the PHP we can modify the HTML this way:
+</p><p>
+	<small>(Please note that templates you load must be valid XML and have a single root node—e.g.
+	“<code>&lt;html&gt;</code>”—in order to work, the examples in this article omit this for simplicity. See
+	<a href="#xml">XML caveats</a> for more details)</small>
+</p>
+
+<pre><code>//load the template and provide an interface
+$template = new DOMTemplate (file_get_contents ('test.html'));
+
+//lets imagine the user is logged in, remove the logged-out section and set the username
+$template-&gt;remove ('.logged-out');
+$template-&gt;setValue ('.username', 'Alice');</code></pre>
+
+<p>
+	The command “<code>remove ('.logged-out')</code>” finds all elements that have a class of
+	“<samp>logged-out</samp>” and deletes them (You can also refer to IDs using ‘<samp>#id</samp>’).
+</p><p>
+	The <code>setValue</code> method sets the text-content of an element, removing anything that was within. By
+	replacing element content it means that you can provide dummy text to test the look and feel of your template, and
+	it will be replaced with the real data. No more staring at <code>{{NAME_GOES_HERE}}</code>!
+</p><p>
+	Behind the scenes “<samp>.logged-out</samp>” becomes the full XPath
+	“<code>.//*[contains(@class,"logged-out")]</code>”. The shorthand syntax also supports specifying a required
+<img src="http://www.shmoop.com/news/wp-content/uploads/2010/09/lolcat3-Thomas.jpg" alt="alt"/>
+	element type and/or an attribute to target, e.g:
+</p>
+
+<pre><code>$template-&gt;setValue ('a.my-button@href', '/some_url');</code></pre>
+
+<p>
+	You can also use full <a href="http://www.w3schools.com/xpath/xpath_syntax.asp" rel="external">XPath syntax</a>:
+</p>
+
+<pre><code>//if using HTTPS, change the Google search box to use HTTPS too
+if (@$_SERVER['HTTPS'] == 'on') $template-&gt;setValue (
+	'//form[@action="http://google.com/search"]/@action', 'https://encrypted.google.com/search'
+);</code></pre>
+
+<p>
+	Looping is always a sore point in templating. How do you take a chunk and repeat it down the page without having to
+	define a ton of logic in your templates?
+</p><p>
+	Looping with the <abbr>DOM</abbr> is shockingly elegant!
+</p>
+
+<pre><code>$item = $template-&gt;repeat ('.list-item');
+foreach ($data as $value) {
+	$item-&gt;setValue ('.item-name', $value);
+	$item-&gt;next ();
+}</code></pre>
+
+<p>
+	The <code>repeat</code> method takes an element (via shorthand/XPath) to be used as the repeating template and
+	copies it, then you just set and remove elements from the repeating template as if it were its own template. Once
+	you’ve templated that iteration you call the <code>next</code> method and the HTML is added after the previous
+	element, then the template repeater resets itself back to the original HTML so you can template it again!
+</p><p>
+	Once you’ve made all your changes to the template, just retrieve the final HTML and output.
+</p>
+
+<pre><code>die ($template-&gt;html ());</code></pre>
+
+<p>
+	See <a href="#api">the API</a> for details of all the functions.
+</p>
+
+
+<h2 id="code">The Code</h2>
+<ul>
+	<li><a href="/code/dom_templating/domtemplate.php">View source code</a></li>
+	<li><a href="https://github.com/Kroc/DOMTemplate" rel="external">View source code on GitHub</a></li>
+	<li><a href="http://forum.camendesign.com" rel="external">Discuss this article in the forum</a> (no
+	registration required)</li>
+</ul>
+<p>
+	If you would like to see a real-world use of this templating system with a ton of examples you can draw from real,
+	practical code you can examine the source code of my forum system called <a href="/nononsense_forum">NoNonsene
+	Forum</a> here:
+</p>
+<ul>
+	<li><a href="https://github.com/Kroc/NoNonsenseForum/blob/master/index.php" rel="external">The PHP logic</a></li>
+	<li><a href="https://github.com/Kroc/NoNonsenseForum/blob/master/themes/greyscale/index.html" rel="external">The
+	HTML template</a></li>
+</ul>
+<p>
+	If you don’t like the idea of targetting classes or IDs in your HTML, have a look at v4 of DOMTemplate that finds
+	elements according to <samp>data-template</samp> attributes.
+</p>
+<ul>
+	<li><a href="/code/dom_templating/domtemplate_v4.rem">The old v4 article</a></li>
+	<li><a href="/code/dom_templating/domtemplate_v4.php">The old v4 code</a></li>
+</ul>
+
+
+<h2 id="caveats">Caveats</h2>
+<dl>
+	<dt id="whitespace">Whitespace handling is good, but not perfect</dt>
+	<dd>
+		<p>
+			In the case of repeating an element the whitespace within is kept, but the whitespace outside the
+			element is not. This is not a major problem, it just means that the closing and opening tags of
+			your lists will be paired (e.g. “<code>…&lt;/li&gt;&lt;li&gt;…</code>”).
+		</p><p>
+			The biggest issue is that when elements are removed, the whitespace around them remains, meaning
+			that you get a number of blank lines in the output HTML where the elements used to be. There’s
+			no direct way of handling this other than perhaps using a search/replace to remove blank lines in
+			the HTML after it’s been templated.
+		</p><p>
+			One benefit of using the <abbr>DOM</abbr> however is that if you want minify the HTML a little,
+			you can just add “<code>$this-&gt;DOMDocument-&gt;preserveWhiteSpace = false;</code>” to the
+			constructor function of <code>DOMTemplate</code> and the <code>html</code> method will return
+			the markup as a big blob with few line-breaks.
+		</p><p>
+			If you add “<code>$this-&gt;DOMDocument-&gt;formatOutput = true;</code>” instead, the markup
+			will be ‘tidied’ for you, re-nesting the elements neatly in an easy to read fashion.
+		</p>
+	</dd>
+	<dt id="xml">XML woes</dt>
+	<dd>
+		<p>
+			The biggest problems are all related to XML not being HTML. Until such a time PHP’s
+			<abbr>DOM</abbr> is updated to treat HTML like it isn’t 1999 anymore, you’ll need to work with
+			the following knowledge:
+		</p>
+		<ul>
+			<li>
+				<p>
+					HTML that is not valid XML will return blank instead. Ensure your templates are
+					valid XML and check your server’s error log to see parsing errors. If you are
+					templating HTML content generated by users, be aware that any invalid HTML will
+					be ignored entirely!
+				</p>
+			</li><li>
+				<p>
+					HTML entities like “<samp>&amp;copy;</samp>” are not understood in XML and
+					will cause the whole template not to load. Many (248) of these will be converted
+					back to unicode automatically to avoid errors, but it is not
+					<a href="http://whatwg.org/specs/web-apps/current-work/multipage/named-character-references.html" rel="external">comprehensive</a>
+					(~2100).
+				</p>
+			</li><li>
+				<p>
+					HTML that you load either through
+					<a href="#api-new"><code>DOMTemplate</code></a> or apply to the template
+					using <samp>setValue</samp> <em>must</em> have only one root node. E.g. A list
+					of elements can not be used unless wrapped by an element.
+				</p>
+			</li><li>
+				<p>
+					Scripts must be commented to hide the text from the XML parser:
+					<abbr title="that is">i.e</abbr>:
+				</p>
+			
+			<pre><code>&lt;script&gt;&lt;!--
+	⋮
+--&gt;&lt;/script&gt;</code></pre>
+			
+			</li>
+		</ul>
+	</dd>
+</dl>
+
+
+<h2 id="api">The API</h2>
+<h3 id="api-new">Instantiation</h3>
+<p>
+	Provide the HTML to load as a string when instantiating the template class. It must be valid XML, and have only one
+	root element (e.g. <code>&lt;html&gt;</code>).
+</p>
+
+<pre><code>$template = new DOMTemplate (file_get_contents ('index.html'));</code></pre>
+
+<p>
+	If you are loading an XHTML document, or any XML file with a default namespace (e.g.
+	<code>&lt;html xmlns="http://www.w3.org/1999/xhtml"&gt;</code>), you <em>must</em> specify a prefix (any will do)
+	and the namespace URL like so:
+</p>
+
+<pre><code>$template = new DOMTemplate ('index.html', 'html', 'http://www.w3.org/1999/xhtml');</code></pre>
+
+<p>
+	All XPath queries you make with this template <em>must</em> prefix element names with the namespace, including for
+	the <a href="#api-shorthand">shorthand</a>:
+</p>
+
+<pre><code>$template-&gt;setValue ('//html:title',         'Hello World');		//XPath
+$template-&gt;setValue ('html:a#my-button@href, 'http://google.co.uk');	//shorthand</code></pre>
+
+<p>
+	This bizzare requirement is a limitation in the design of XPath itself.
+</p>
+
+
+<h3 id="api-shorthand">Shorthand XPath Syntax</h3>
+<ul>
+	<li>
+		<p>
+			All of the methods that accept a query (<a href="#api-setvalue"><code>setValue</code></a>,
+			<a href="#api-set"><code>set</code></a>, <a href="#api-repeat"><code>addClass</code></a>,
+			<a href="#api-repeat"><code>remove</code></a> &amp;
+			<a href="#api-repeat"><code>repeat</code></a>) use a shorthand-syntax  where you only need to
+			provide the class (“<samp>.class</samp>”) or ID (“<samp>#id</samp>”) you want to target
+			and the full <a href="http://www.w3schools.com/xpath/xpath_syntax.asp" rel="external">XPath
+			query</a> is built for you. E.g. <code>`.my-button`</code>
+		</p>
+	</li><li>
+		<p>An element type can be provided: <code>`a#my-button`</code></p>
+	</li><li>
+		<p>
+			An attribute name can be provided which will be the target of the
+			<a href="#api-setvalue"><code>setValue</code></a>, <a href="#api-set"><code>set</code></a>
+			and <a href="#api-repeat"><code>remove</code></a> methods: <code>`a#my-button@href`</code>
+		</p>
+	</li><li>
+		<p>
+			You can test attributes for values (the element will be selected, not the attribute):<br>
+			<code>`label@for="submit"`</code>
+		</p>
+	</li><li>
+		<p>You can specify the index of an element to select: <code>`li[1]`</code></p>
+	</li><li>
+		<p>You can select child elements: <code>`#list/li/a`</code></p>
+	</li><li>
+		<p>You can also just use full XPath query, as-is: <code>`/html/head/title`</code></p>
+	</li><li>
+		<p>
+			You can provide multiple targets by separating the queries with commas, e.g:
+			<code>`.header, .body, .footer`</code><br>
+			You can intermix shorthand and full XPath like this.
+		</p>
+	</li>
+</ul>
+
+
+<h3 id="api-html"><code>html</code></h3>
+<p>
+	<code>html ()</code>
+</p><p>
+	Returns a string of the HTML of the template.
+</p>
+
+
+<h3 id="api-repeat"><code>repeat</code></h3>
+<p>
+	<code>repeat (string $query)</code>
+</p><p>
+	Takes a <a href="#api-shorthand">shorthand XPath query</a> and returns a <code>DOMTemplateRepeaterArray</code>
+	object instantiated with the element(s) selected in the query. This object supports the
+	<a href="#api-set"><code>set</code></a>, <a href="#api-setvalue"><code>setValue</code></a>,
+	<a href="#api-addclass"><code>addClass</code></a> &amp; <a href="#api-remove"><code>remove</code></a> methods,
+	in addition to the following:
+</p>
+<h4 id="api-next"><code>next</code></h4>
+<p>
+	Takes the current HTML content of the elements within <code>DOMTemplateRepeaterArray</code> object and appends it
+	as a sibling to the previously repeated template (<abbr title="that is,">i.e</abbr> either the element(s) you
+	instantiated the repeater with, or the element(s) that were added by the previous call to the <code>next</code>
+	method), then resets its HTML content back to the original HTML it had when it was created.
+</p><p>
+	In simple terms, it adds the templated HTML to end of a list and then resets it back to the original HTML, to be
+	used again. In practical terms, like this:
+</p>
+
+<pre><code>$item = $template-&gt;repeat ('.list-item');
+foreach ($data as $value) {
+	$item-&gt;setValue ('.item-name', $value);
+	$item-&gt;next ();
+}</code></pre>
+
+
+<h3 id="api-setvalue"><code>setValue</code></h3>
+<p>
+	<code>setValue (string $query, string $value, [bool $asHTML=false])</code>
+</p><p>
+	Replaces the content of all elements matched with the <a href="#api-shorthand">shorthand XPath query</a> with the
+	given value. The string value is HTML-encoded (unless you give <code>`asHTML`</code> as true), so any HTML in the
+	value will appear as-is, rather than be rendered as HTML. This method intelligently sets the value to elements,
+	attributes and classes according to the XPath used. See <a href="#api-addclass"><samp>addClass</samp></a> for
+	details on HTML class behaviour.
+</p>
+
+<pre><code>$template-&gt;setValue ('#name', 'Kroc');</code></pre>
+
+
+<h3 id="api-set"><code>set</code></h3>
+<p>
+	<code>set (array $queries, [bool $asHTML=false])</code>
+</p><p>
+	Allows you to write code in a more compact way by specifiying an array of <a href="#api-shorthand">shorthand XPath
+	queries</a> and their associated value to set.
+</p>
+
+<pre><code>$template-&gt;set (array (
+	'#name' =&gt; 'Kroc',
+	'#site' =&gt; 'http://camendesign.com'
+));</code></pre>
+
+
+<h3 id="api-addclass"><code>addClass</code></h3>
+<p>
+	<code>addClass (string $class)</code>
+</p><p>
+	Adds the specificed HTML class name to every element matched with the <a href="#api-shorthand">shorthand XPath
+	query</a>. If an element already has a class attribute, mutliple class names will be separated by spaces when the
+	new class is added.
+</p>
+
+<pre><code>$template-&gt;addClass ('#section', 'open');</code></pre>
+
+
+<h3 id="api-remove"><code>remove</code></h3>
+<p>
+	<code>remove (string $query | array $queries)</code>
+</p><p>
+	Deletes all the elements (and their children) matched with the <a href="#api-shorthand">shorthand XPath query</a>.
+</p>
+
+<pre><code>$template-&gt;remove ('.secret-stuff');</code></pre>
+
+<p>
+	Also accepts an array in the format of “<code>'xpath' =&gt; true|false</code>”.<br>
+	If the value is false, the XPath will be skipped. This allows you to write compact removal code by not having to
+	write “<code>if (x) $template-&gt;remove ('y');</code>” several times in a row, e.g:
+</p>
+
+<pre><code>$template-&gt;remove (array (
+	'.section-1' =&gt; $section == 1,
+	'.section-2' =&gt; $section == 2,
+	⋮
+));</code></pre>
+
+<p>
+	For a good example of this style of writing, see
+	<a href="https://github.com/Kroc/NoNonsenseForum/blob/master/index.php" rel="external">the code</a> for
+	<a href="/nononsense_forum">NoNonsense Forum</a>.
+</p><p>
+	In addition to this behaviour, you can also remove classNames from a class attribute, whilst retaining any other
+	class names present by specifying the className to remove in the value, when tragetting a class attribute with the
+	XPath, thusly:
+</p>
+
+<pre><code>$template-&gt;remove (array ('a@class' =&gt; 'undesired'));</code></pre>
+
+
+<h2 id="history">History</h2>
+<ul>
+	<li><strong>v12</strong> Ability to remove classNames using <code>`remove`</code> method</li>
+	<li><strong>v11</strong> Changed instantiation to use a string instead of a filename</li>
+	<li><strong>v10</strong> <code>`repeat`</code> now works simultaneously with multiple elements instead of just
+	one</li>
+	<li><strong>v9</strong> Greatly improved shorthand XPath syntax adding index matching, child matching &amp;
+	attribute testing</li>
+	<li><strong>v8</strong> Changed <code>`setValue`</code> to intelligently apply to elements, attributes or
+	classes, with a parameter to include HTML as-is (<code>`setHTML`</code> was removed)</li>
+	<li><strong>v7</strong> XML prolog is kept if already present and UTF-8 characters are no longer hex-encoded</li>
+	<li><strong>v6</strong> XML namespace support. Also, template repeating now appends as a sibling, not as the
+	last child of the parent (removes the need for a superfluous parent element).</li>
+	<li><strong>v5</strong> New shorthand XPath syntax for classes and IDs instead of <code>`data-template`</code>
+	attributes</li>
+	<li><strong>v4</strong> Added multiple XPath targets</li>
+	<li><strong>v3</strong> Added method chaining</li>
+	<li><strong>v2</strong> Added HTML entity decoding</li>
+	<li><strong>v1</strong> Initial release</li>
+</ul>
+</section>
+
+    <div>some dom</div>
+    <div>some dom</div>
+    <div>some dom</div>
+    <div>some dom</div>
+    <div>some dom</div>
+    <div id="idv">
+        <span>some span</span>
+    </div>
+    <div id="idv">
+        <span>some span</span>
+    </div>
+    <div id="idv">
+        <span>some span</span>
+    </div>
+    <div id="idv">
+        <span>some span</span>
+        <img src="http://www.untoldentertainment.com/blog/img/2011_06_07/lolcat.jpg" alt="alt"/>
+    </div>
+    <div id="idv">
+        <span>some span</span>
+    </div>
+</body>
+</html>
